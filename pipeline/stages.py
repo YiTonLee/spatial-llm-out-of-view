@@ -12,6 +12,10 @@ Stage            what it produces                                         slides
 9 look_choice    which frames to look at: last sighting of each ball      block 6, table 3
 10 report        your numbers next to ours                                docs/04_RESULTS.md
 
+Evidence-pipeline stages (branch evidence-pipeline; not part of `run.py all`, run them by name):
+e0             cost of every answering step, accuracy-cost frontier     docs/07_EVIDENCE_PIPELINE.md, E0
+e1_d1          same facts in five note formats, untrained and trained   docs/07_EVIDENCE_PIPELINE.md, E1
+
 quick=True keeps every stage but shortens training and evaluation (minutes instead of hours); the numbers are then
 meaningless, it only checks that everything runs. The data and cache stages are the same in both modes.
 """
@@ -162,10 +166,42 @@ def look_choice(quick):
     return steps
 
 
+def e0(quick):
+    n = '2' if quick else '20'
+    return [Step('e0_ledger', f'time every answering step on {n} eval8 scenes; frontier and gates (docs/gates/e0_gates.md)',
+                 ['e0_ledger.py', '--n', n, '--out', 'e0'], ['e0/e0_ledger.json'], gpu=True, minutes='3')]
+
+
+E1_UNTRAINED = ','.join([f'F{i}:est:v8' for i in range(5)] + [f'F{i}:est:l1' for i in range(5)] +
+                        [f'F{i}:{q}:v8' for q in ('orc', 'cor', 'shuf') for i in range(1, 5)] + ['F4:neg:v8'])
+
+
+def e1_d1(quick):
+    n = ['--n', '4'] if quick else []
+    steps_ = ['--steps', '20'] if quick else []
+    steps = [Step('e1_untrained', 'untrained model, 23 note variants on eval8 (docs/gates/e1_gates.md)',
+                  ['e1_d1.py', 'eval', '--arms', E1_UNTRAINED, '--out', 'e1/eval_untrained.json'] + n,
+                  ['e1/eval_untrained.json'], gpu=True, minutes='105')]
+    for f in ('F1', 'F2', 'F3', 'F4'):
+        steps += [Step(f'e1_train_{f}', f'LoRA trained with {f} notes (from W, true-track notes)',
+                       ['e1_d1.py', 'train', '--fmt', f, '--save', f'e1/lora_{f}.pt'] + steps_, [f'e1/lora_{f}.pt'],
+                       gpu=True, minutes='22' if f == 'F1' else '8'),
+                  Step(f'e1_eval_{f}', f'the {f} LoRA on 5 note variants',
+                       ['e1_d1.py', 'eval', '--lora', f'e1/lora_{f}.pt', '--arms',
+                        f'{f}:est:v8,{f}:orc:v8,{f}:cor:v8,{f}:shuf:v8,F0:est:v8', '--out', f'e1/eval_lora_{f}.json'] + n,
+                       [f'e1/eval_lora_{f}.json'], gpu=True, minutes='20')]
+    steps.append(Step('e1_report', 'table, paired differences, gates', ['e1_d1.py', 'report'], ['e1/E1_D1_table.md'],
+                      minutes='1 (CPU)', fresh=['e1/E1_D1_table.md']))
+    return steps
+
+
 def report(quick):
     from . import report as R
     return [Step('report', 'collect every result and compare with ours', lambda: R.main(quick))]
 
 
 STAGES = {'data': data, 'cache': cache, 'model_w': model_w, 'estimator': estimator, 'record_lora': record_lora,
-          'rules': rules, 'ladder': ladder, 'versions': versions, 'look_choice': look_choice, 'report': report}
+          'rules': rules, 'ladder': ladder, 'versions': versions, 'look_choice': look_choice, 'report': report,
+          'e0': e0, 'e1_d1': e1_d1}
+CORE = ['data', 'cache', 'model_w', 'estimator', 'record_lora', 'rules', 'ladder', 'versions', 'look_choice', 'report']
+EVIDENCE = ['e0', 'e1_d1']   # evidence-pipeline experiments: run by name, after model_w and estimator

@@ -6,6 +6,7 @@
   python run.py ladder --step m_r_ca_dist # only steps whose name contains this text
   python run.py all --quick --work workspace_quick   # smoke test: short training/eval, meaningless numbers
   python run.py report                    # your numbers next to ours (docs/04_RESULTS.md explains them)
+  python run.py e0 e1_d1                  # evidence-pipeline experiments (docs/07_EVIDENCE_PIPELINE.md)
 
 Options
   --work PATH   workspace folder (default ./workspace, or $SPATIAL_LLM_WORK)
@@ -14,6 +15,8 @@ Options
   --dry         print what would run, run nothing
 
 Stages run in this order: data, cache, model_w, estimator, record_lora, rules, ladder, versions, look_choice, report.
+`all` runs these ten. The evidence-pipeline stages (e0, e1_d1) run only when named; they need model_w and estimator.
+Public datasets for later experiments: python -m agent.data.download (docs/07_EVIDENCE_PIPELINE.md).
 Each step is skipped when its output files already exist, so an interrupted run continues where it stopped.
 """
 import argparse, sys, time
@@ -32,7 +35,7 @@ def main():
     a = ap.parse_args()
     if a.work:
         config.set_work(a.work)
-    from pipeline.stages import STAGES
+    from pipeline.stages import STAGES, CORE
     from pipeline.runner import run_step, done
 
     if a.stages == ['list']:
@@ -43,7 +46,7 @@ def main():
                 flag = 'done' if done(s) else ('GPU ' if s.gpu else '    ')
                 print(f'     [{flag:4s}] {s.name:22s} {s.minutes:>16s}  {s.what}')
         return
-    names = list(STAGES) if a.stages == ['all'] else a.stages
+    names = CORE if a.stages == ['all'] else a.stages
     unknown = [n for n in names if n not in STAGES]
     if unknown:
         sys.exit(f'unknown stage(s) {unknown}; choose from {list(STAGES)}')

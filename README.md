@@ -82,6 +82,8 @@ You can also open the notebooks in `notebooks/` in order (00 → 06). They run t
 | `reference/` | Our numbers (`expected_results.json`) and data fingerprints (`data_fingerprints.json`) |
 | `tests/` | Fast CPU checks (`python -m pytest tests`) |
 | `tools/` | Authors-only helpers (rebuilding the reference file) |
+| `agent/` | Evidence pipeline (branch `evidence-pipeline`): packet formats, cost accounting, public-dataset downloader |
+| `data/` | Created by `python -m agent.data.download`: public datasets. Not committed |
 | `workspace/` | Created by `run.py`: videos, caches, weights, results, logs. Not committed |
 
 ## Guides (read in this order)
@@ -92,6 +94,7 @@ You can also open the notebooks in `notebooks/` in order (00 → 06). They run t
 4. [docs/04_RESULTS.md](docs/04_RESULTS.md): the three result tables and how to read them
 5. [docs/05_STATUS_AND_NEXT_STEPS.md](docs/05_STATUS_AND_NEXT_STEPS.md): current stage, progress, next steps
 6. [docs/06_HISTORY.md](docs/06_HISTORY.md): what we tried that did not hold
+7. [docs/07_EVIDENCE_PIPELINE.md](docs/07_EVIDENCE_PIPELINE.md): the evidence pipeline (E0, E1), public datasets
 
 ---
 
@@ -112,6 +115,27 @@ You can also open the notebooks in `notebooks/` in order (00 → 06). They run t
 - **Run on real data.** All results are on simulated videos. The current system must be run on real video, for example **Beyond3D**, to see whether it holds outside simulation.
 
 Details: [docs/05_STATUS_AND_NEXT_STEPS.md](docs/05_STATUS_AND_NEXT_STEPS.md).
+
+## Public datasets (evidence pipeline)
+
+The experiments from E1 domain 2 on use public image, document and video datasets. **They are not in this repository**:
+together they are about 170 GB, GitHub refuses files over 100 MB, and several licences forbid passing copies on.
+Instead, one command fetches them from their original sources into `data/public/`, which git ignores:
+
+```bash
+pip install huggingface_hub                         # for the Hugging Face items (no login needed)
+python -m agent.data.download --list                # what exists, size, licence, which experiment uses it
+python -m agent.data.download --only e1_d2          # just what one experiment needs (about 21 GB)
+python -m agent.data.download                       # everything (about 170 GB; resumable: re-run after a drop)
+python -m agent.data.download --check --verify      # confirm your files match ours (sha256)
+```
+
+- **Three datasets need a person.** DocVQA and InfographicVQA require each user to register at rrc.cvc.uab.es, and
+  the bird photos (CUB) must be downloaded in a browser. The script prints the steps and then checks the files.
+- **On Colab**, add `--data /content/drive/MyDrive/spatial_llm/data/public` so the data survives the session.
+- **Do not upload or share** DocVQA, InfographicVQA or CUB copies.
+
+Details: [docs/07_EVIDENCE_PIPELINE.md](docs/07_EVIDENCE_PIPELINE.md).
 
 ## Requirements
 
