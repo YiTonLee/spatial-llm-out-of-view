@@ -6,7 +6,7 @@
   python run.py ladder --step m_r_ca_dist # only steps whose name contains this text
   python run.py all --quick --work workspace_quick   # smoke test: short training/eval, meaningless numbers
   python run.py report                    # your numbers next to ours (docs/04_RESULTS.md explains them)
-  python run.py e0 e1_d1                  # evidence-pipeline experiments (docs/07_EVIDENCE_PIPELINE.md)
+  python run.py e0 e1_d1 e1_d2 e6a        # evidence-pipeline experiments (docs/07_EVIDENCE_PIPELINE.md)
 
 Options
   --work PATH   workspace folder (default ./workspace, or $SPATIAL_LLM_WORK)
@@ -15,7 +15,8 @@ Options
   --dry         print what would run, run nothing
 
 Stages run in this order: data, cache, model_w, estimator, record_lora, rules, ladder, versions, look_choice, report.
-`all` runs these ten. The evidence-pipeline stages (e0, e1_d1) run only when named; they need model_w and estimator.
+`all` runs these ten. The evidence-pipeline stages (e0, e1_d1, e1_d2, e6a) run only when named; e0 and e1_d1 need model_w and
+estimator, e1_d2 and e6a need the public data (python -m agent.data.download --only e1_d2 / --only e6a).
 Public datasets for later experiments: python -m agent.data.download (docs/07_EVIDENCE_PIPELINE.md).
 Each step is skipped when its output files already exist, so an interrupted run continues where it stopped.
 """

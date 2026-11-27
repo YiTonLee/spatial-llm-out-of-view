@@ -15,6 +15,8 @@ Stage            what it produces                                         slides
 Evidence-pipeline stages (branch evidence-pipeline; not part of `run.py all`, run them by name):
 e0             cost of every answering step, accuracy-cost frontier     docs/07_EVIDENCE_PIPELINE.md, E0
 e1_d1          same facts in five note formats, untrained and trained   docs/07_EVIDENCE_PIPELINE.md, E1
+e1_d2          the same on real photos (VSR)                            docs/07_EVIDENCE_PIPELINE.md, E1
+e6a            helper size: 3B (self) and 7B notes for the 3B student   docs/07_EVIDENCE_PIPELINE.md, E6a
 
 quick=True keeps every stage but shortens training and evaluation (minutes instead of hours); the numbers are then
 meaningless, it only checks that everything runs. The data and cache stages are the same in both modes.
@@ -194,6 +196,63 @@ def e1_d1(quick):
                       minutes='1 (CPU)', fresh=['e1/E1_D1_table.md']))
     return steps
 
+E1_D2_UNTRAINED = ','.join([f'F{i}:tool:img' for i in range(5)] + [f'F{i}:tool:none' for i in range(5)] +
+                           ['F3:shuf:img', 'F4:shuf:img', 'F4:neg:img', 'F5:tool:img', 'F6:tool:img'])
+
+
+def e1_d2(quick):
+    """E1 domain 2 (VSR real photos). Needs: python -m agent.data.download --only e1_d2 (about 21 GB)."""
+    n = ['--n', '16'] if quick else []
+    steps_ = ['--steps', '20'] if quick else []
+    steps = [Step('e1d2_tools', 'detector + depth on VSR dev, test and train (docs/gates/e1_d2_gates.md)',
+                  ['e1_d2.py', 'tools', '--split', 'dev,test,train'] + n,
+                  ['e1d2/tools_dev.json', 'e1d2/tools_test.json', 'e1d2/tools_train.json'], gpu=True, minutes='50'),
+             Step('e1d2_check', 'C0 stop rule: tool agreement on dev >= 60% (stops the stage otherwise)',
+                  ['e1_d2.py', 'check'], ['e1d2/c0_dev.json'], minutes='1 (CPU)'),
+             Step('e1d2_untrained', 'untrained model, 15 note variants on VSR test',
+                  ['e1_d2.py', 'eval', '--arms', E1_D2_UNTRAINED, '--out', 'e1d2/eval_untrained.json'] + n,
+                  ['e1d2/eval_untrained.json'], gpu=True, minutes='37')]
+    for f in ('F1', 'F2', 'F3', 'F4'):
+        steps += [Step(f'e1d2_train_{f}', f'LoRA trained with {f} tool notes on VSR train (20% of items without a note)',
+                       ['e1_d2.py', 'train', '--fmt', f, '--save', f'e1d2/lora_{f}.pt'] + steps_, [f'e1d2/lora_{f}.pt'],
+                       gpu=True, minutes='9'),
+                  Step(f'e1d2_eval_{f}', f'the {f} LoRA on 4 note variants',
+                       ['e1_d2.py', 'eval', '--lora', f'e1d2/lora_{f}.pt', '--arms',
+                        f'{f}:tool:img,{f}:shuf:img,F0:tool:img,{f}:tool:none', '--out', f'e1d2/eval_lora_{f}.json'] + n,
+                       [f'e1d2/eval_lora_{f}.json'], gpu=True, minutes='9')]
+    steps += [Step('e1d2_report', 'table, paired differences, gates', ['e1_d2.py', 'report'], ['e1d2/E1_D2_table.md'],
+                   minutes='1 (CPU)', fresh=['e1d2/E1_D2_table.md']),
+              Step('e1d2_extra', 'after-the-run split: tool right vs tool wrong; note-only format gaps (not a gate)',
+                   ['e1_d2_extra.py'], ['e1d2/e1_d2_extra.json'], minutes='1 (CPU)', fresh=['e1d2/e1_d2_extra.json'])]
+    return steps
+
+
+E6A_MIN = {'d1': (6, 12, 4), 'd2': (4, 6, 2), 'd3': (6, 10, 3), 'd4': (3, 6, 2)}   # notes 3B, notes 7B, student
+
+
+def e6a(quick):
+    """E6a helper size (docs/gates/e6a_gates.md). Needs: python -m agent.data.download --only e6a. The d2 'S+tools'
+    reference arm also needs run.py e1_d2 (its tools_dev.json); without it that arm is left out."""
+    n, t = (['--n', '3'], '_n3') if quick else ([], '')
+    steps = [Step('e6a_items', '100 calibration + 300 scoring items per domain (seed 6); 16 frames per video for d1',
+                  ['e6a.py', 'items'], [f'e6a/{d}/items_{d}.json' for d in ('d1', 'd2', 'd3', 'd4')], minutes='5 (CPU)')]
+    for d in ('d2', 'd3', 'd4', 'd1'):
+        m3, m7, ms = E6A_MIN[d]
+        steps += [Step(f'e6a_{d}_notes_s3b', f'{d}: the 3B writes its own note; times and memory',
+                       ['e6a.py', 'notes', '--domain', d, '--model', 's3b'] + n, [f'e6a/{d}/notes_s3b{t}.json'],
+                       gpu=True, minutes=str(m3)),
+                  Step(f'e6a_{d}_notes_h7b', f'{d}: the 7B writes a note and also answers alone',
+                       ['e6a.py', 'notes', '--domain', d, '--model', 'h7b'] + n, [f'e6a/{d}/notes_h7b{t}.json'],
+                       gpu=True, minutes=str(m7)),
+                  Step(f'e6a_{d}_student', f'{d}: the 3B answers alone and with each note',
+                       ['e6a.py', 'student', '--domain', d] + n, [f'e6a/{d}/student{t}.json'], gpu=True, minutes=str(ms)),
+                  Step(f'e6a_{d}_check', f'{d}: stop rule S0 (note format >= 95% on calibration) and S2 (time)',
+                       ['e6a.py', 'check', '--domain', d] + n, [f'e6a/{d}/check{t}.json'], minutes='1 (CPU)')]
+    steps.append(Step('e6a_report', 'tau on calibration, accuracy and time per arm, frontier, G6a',
+                      ['e6a.py', 'report'] + (['--tag', t] if t else []), [f'e6a/E6A_table{t}.md'], minutes='1 (CPU)',
+                      fresh=[f'e6a/E6A_table{t}.md']))
+    return steps
+
 
 def report(quick):
     from . import report as R
@@ -202,6 +261,7 @@ def report(quick):
 
 STAGES = {'data': data, 'cache': cache, 'model_w': model_w, 'estimator': estimator, 'record_lora': record_lora,
           'rules': rules, 'ladder': ladder, 'versions': versions, 'look_choice': look_choice, 'report': report,
-          'e0': e0, 'e1_d1': e1_d1}
+          'e0': e0, 'e1_d1': e1_d1, 'e1_d2': e1_d2, 'e6a': e6a}
 CORE = ['data', 'cache', 'model_w', 'estimator', 'record_lora', 'rules', 'ladder', 'versions', 'look_choice', 'report']
-EVIDENCE = ['e0', 'e1_d1']   # evidence-pipeline experiments: run by name, after model_w and estimator
+EVIDENCE = ['e0', 'e1_d1', 'e1_d2', 'e6a']   # evidence-pipeline experiments: run by name (e0, e1_d1 after model_w
+                                             # and estimator; e1_d2, e6a after python -m agent.data.download --only <name>)

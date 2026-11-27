@@ -94,7 +94,7 @@ You can also open the notebooks in `notebooks/` in order (00 → 06). They run t
 4. [docs/04_RESULTS.md](docs/04_RESULTS.md): the three result tables and how to read them
 5. [docs/05_STATUS_AND_NEXT_STEPS.md](docs/05_STATUS_AND_NEXT_STEPS.md): current stage, progress, next steps
 6. [docs/06_HISTORY.md](docs/06_HISTORY.md): what we tried that did not hold
-7. [docs/07_EVIDENCE_PIPELINE.md](docs/07_EVIDENCE_PIPELINE.md): the evidence pipeline (E0, E1), public datasets
+7. [docs/07_EVIDENCE_PIPELINE.md](docs/07_EVIDENCE_PIPELINE.md): the evidence pipeline (E0, E1 domains 1 and 2, E6a helper size), public datasets
 
 ---
 

@@ -83,5 +83,6 @@ DATASETS = {
 # Named groups for --only: what one experiment needs
 GROUPS = {
     'e1_d2': ['vsr', 'coco2017', 'models/Depth-Anything-V2-Small-hf', 'models/grounding-dino-tiny'],
+    'e6a': ['perception_test', 'vsr', 'coco2017', 'chartqa', 'visual_cot', 'gqa'],
     'small': [k for k, v in DATASETS.items() if v['gb'] < 2 and v['kind'] != 'manual'],
 }
